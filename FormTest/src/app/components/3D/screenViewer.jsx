@@ -117,15 +117,20 @@ function Model({
           color: new THREE.Color(0xb0c8d4),
           transmission: 0.94,
           thickness: 0.2,
-          roughness: 0.8,
-          metalness: 0.2,
+          roughness: 0.42,
+          metalness: 0.35,
           ior: 1.45,
           transparent: true,
           opacity: 0.1,
           side: THREE.DoubleSide,
-          envMapIntensity: 0.8,
+          envMapIntensity: 1.25,
           attenuationColor: new THREE.Color(0x9dd5d0),
           attenuationDistance: 0.55,
+          clearcoat: 0.35,
+          clearcoatRoughness: 0.15,
+          sheen: 0.12,
+          sheenColor: new THREE.Color(0xffffff),
+          sheenRoughness: 0.4,
         })
         mat.envMap = envMap
         child.material = mat
@@ -208,8 +213,13 @@ export default function SceneViewer({
   modelPath = 'https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/FormTest.glb',
   className = '',
   style = {},
+  autoRotate: autoRotateProp,
+  onAutoRotateChange,
+  canvasBlurPx = 6,
 }) {
-  const [autoRotate, setAutoRotate] = useState(true)
+  const [autoRotateInternal, setAutoRotateInternal] = useState(true)
+  const autoRotate = autoRotateProp !== undefined ? autoRotateProp : autoRotateInternal
+  const setAutoRotate = onAutoRotateChange ?? setAutoRotateInternal
   const [isDragging, setIsDragging] = useState(false)
 
   const uniformsRef = useRef({
@@ -236,13 +246,14 @@ export default function SceneViewer({
         width: '100%',
         height: '100%',
         position: 'relative',
+        zIndex: 1,
         cursor: isDragging ? 'grabbing' : 'grab',
         ...style,
       }}
     >
       <Canvas
         camera={{ position: [0, 0, 1], fov: 45 }}
-        style={{ background: 'transparent' }}
+        style={{ background: 'transparent', filter: `blur(${canvasBlurPx}px)` }}
         gl={{ antialias: true, alpha: true }}
         onPointerDown={() => setIsGrabbing(true)}
         onPointerUp={() => setIsGrabbing(false)}
@@ -288,32 +299,6 @@ export default function SceneViewer({
 />
         </EffectComposer>
       </Canvas>
-
-      <button
-        type="button"
-        onClick={() => setAutoRotate((v) => !v)}
-        onPointerDown={(e) => e.stopPropagation()}
-        onPointerUp={(e) => e.stopPropagation()}
-        style={{
-          position: 'absolute',
-          bottom: 16,
-          right: 16,
-          background: 'rgba(255,255,255,0.15)',
-          backdropFilter: 'blur(8px)',
-          border: '1px solid rgba(0,0,0,0.1)',
-          borderRadius: 6,
-          padding: '6px 12px',
-          fontSize: 11,
-          letterSpacing: '0.08em',
-          color: '#555',
-          cursor: 'pointer',
-          transition: 'all 200ms ease',
-        }}
-        onMouseEnter={(e) => (e.target.style.background = 'rgba(255,255,255,0.3)')}
-        onMouseLeave={(e) => (e.target.style.background = 'rgba(255,255,255,0.15)')}
-      >
-        {autoRotate ? '⏸ PAUSE' : '▶ ROTATE'}
-      </button>
 
       <div
         style={{
