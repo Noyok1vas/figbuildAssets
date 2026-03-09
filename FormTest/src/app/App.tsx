@@ -3,9 +3,18 @@ import { RotateCcw, Layers, Info, ChevronLeft, ChevronRight } from "lucide-react
 import SceneViewer from "./components/3D/screenViewer";
 
 const MODEL_PATHS = [
-  "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/FormTest.glb",
-  "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/Form02.glb",
-  "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/FormTest.glb",
+  "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/Form_01.glb",
+  "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/Form_02.glb",
+  "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/Form_03.glb",
+];
+
+// 面光颜色组：粉紫、粉蓝、蓝紫、蓝绿、粉红（每组两色用于两个 rectAreaLight）
+const AREA_LIGHT_PRESETS: { color1: string; color2: string }[] = [
+  { color1: "#e8b4f0", color2: "#c084e0" }, // 粉紫
+  { color1: "#e0b8f8", color2: "#88b8f0" }, // 粉蓝
+  { color1: "#88a0f8", color2: "#b088e0" }, // 蓝紫
+  { color1: "#70c0d8", color2: "#60d0a8" }, // 蓝绿
+  { color1: "#f8a8c0", color2: "#f08098" }, // 粉红
 ];
 
 export default function App() {
@@ -20,6 +29,7 @@ export default function App() {
   const [bumpSpike, setBumpSpike] = useState(0);
   const [density, setDensity] = useState(200);
   const [modelIndex, setModelIndex] = useState(0);
+  const [areaLightGroupIndex, setAreaLightGroupIndex] = useState(0);
   const idleTimer = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
@@ -209,33 +219,43 @@ export default function App() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 24 }}>
+          {/* 3D 框 + 翻页 + 颜色选择 同宽居中对齐 */}
           <div
-            id="scene-container"
-            onMouseDown={() => setIsGrabbing(true)}
-            onMouseUp={() => setIsGrabbing(false)}
-            onMouseEnter={(e) => {
-              (
-                e.currentTarget as HTMLDivElement
-              ).style.borderColor = "rgba(37, 33, 28, 0.6)";
-            }}
-            onMouseLeave={(e) => {
-              setIsGrabbing(false);
-              (
-                e.currentTarget as HTMLDivElement
-              ).style.borderColor = "rgba(37, 33, 28, 0.5)";
-            }}
             style={{
               width: "60vw",
-              height: "60vh",
               minWidth: 400,
-              minHeight: 400,
-              background: "transparent",
-              border: "1px solid rgba(37, 33, 28, 0.5)",
-              borderRadius: 4,
-              cursor: isGrabbing ? "grabbing" : "grab",
-              transition: "border-color 200ms ease",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 16,
             }}
           >
+            <div
+              id="scene-container"
+              onMouseDown={() => setIsGrabbing(true)}
+              onMouseUp={() => setIsGrabbing(false)}
+              onMouseEnter={(e) => {
+                (
+                  e.currentTarget as HTMLDivElement
+                ).style.borderColor = "rgba(37, 33, 28, 0.6)";
+              }}
+              onMouseLeave={(e) => {
+                setIsGrabbing(false);
+                (
+                  e.currentTarget as HTMLDivElement
+                ).style.borderColor = "rgba(37, 33, 28, 0.5)";
+              }}
+              style={{
+                width: "100%",
+                height: "60vh",
+                minHeight: 400,
+                background: "transparent",
+                border: "1px solid rgba(37, 33, 28, 0.5)",
+                borderRadius: 4,
+                cursor: isGrabbing ? "grabbing" : "grab",
+                transition: "border-color 200ms ease",
+              }}
+            >
             <SceneViewer
               key={modelIndex}
               modelPath={MODEL_PATHS[modelIndex]}
@@ -253,11 +273,109 @@ export default function App() {
               setBumpSpike={setBumpSpike}
               density={density}
               setDensity={setDensity}
+              rectAreaLightColors={AREA_LIGHT_PRESETS[areaLightGroupIndex]}
               style={{
                 width: "100%",
                 height: "100%",
               }}
             />
+            </div>
+        {/* Model switcher arrows — below 3D block */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
+          }}
+        >
+          <button
+            type="button"
+            aria-label="Previous model"
+            disabled={modelIndex === 0}
+            onClick={() => setModelIndex((i) => i - 1)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 36,
+              height: 36,
+              border: "1px solid rgba(37, 33, 28, 0.5)",
+              borderRadius: 6,
+              background: modelIndex === 0 ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.15)",
+              color: modelIndex === 0 ? "rgba(37, 33, 28, 0.4)" : "rgba(37, 33, 28, 0.9)",
+              cursor: modelIndex === 0 ? "not-allowed" : "pointer",
+              transition: "all 200ms ease",
+            }}
+          >
+            <ChevronLeft size={20} strokeWidth={1.5} />
+          </button>
+          <span
+            style={{
+              fontSize: 11,
+              letterSpacing: "0.06em",
+              color: "rgba(37, 33, 28, 0.8)",
+              minWidth: 48,
+              textAlign: "center",
+            }}
+          >
+            {modelIndex + 1} / {MODEL_PATHS.length}
+          </span>
+          <button
+            type="button"
+            aria-label="Next model"
+            disabled={modelIndex === MODEL_PATHS.length - 1}
+            onClick={() => setModelIndex((i) => i + 1)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 36,
+              height: 36,
+              border: "1px solid rgba(37, 33, 28, 0.5)",
+              borderRadius: 6,
+              background: modelIndex === MODEL_PATHS.length - 1 ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.15)",
+              color: modelIndex === MODEL_PATHS.length - 1 ? "rgba(37, 33, 28, 0.4)" : "rgba(37, 33, 28, 0.9)",
+              cursor: modelIndex === MODEL_PATHS.length - 1 ? "not-allowed" : "pointer",
+              transition: "all 200ms ease",
+            }}
+          >
+            <ChevronRight size={20} strokeWidth={1.5} />
+          </button>
+        </div>
+        {/* 面光颜色选择：5 组渐变圆点（无光晕） */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 16,
+          }}
+        >
+          {AREA_LIGHT_PRESETS.map((preset, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`颜色组 ${i + 1}`}
+              onClick={() => setAreaLightGroupIndex(i)}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                border:
+                  areaLightGroupIndex === i
+                    ? "2px solid rgba(37, 33, 28, 0.9)"
+                    : "2px solid rgba(37, 33, 28, 0.35)",
+                background: `radial-gradient(circle at 30% 30%, ${preset.color1}, ${preset.color2})`,
+                cursor: "pointer",
+                padding: 0,
+                boxShadow: "none",
+                outline: "none",
+                transition: "border-color 200ms ease",
+              }}
+            />
+          ))}
+        </div>
           </div>
           {/* Sliders panel — outside 3D box */}
           <div
@@ -350,69 +468,6 @@ export default function App() {
             </div>
           ))}
           </div>
-        </div>
-        {/* Model switcher arrows — below 3D block */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 12,
-          }}
-        >
-          <button
-            type="button"
-            aria-label="Previous model"
-            disabled={modelIndex === 0}
-            onClick={() => setModelIndex((i) => i - 1)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 36,
-              height: 36,
-              border: "1px solid rgba(37, 33, 28, 0.5)",
-              borderRadius: 6,
-              background: modelIndex === 0 ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.15)",
-              color: modelIndex === 0 ? "rgba(37, 33, 28, 0.4)" : "rgba(37, 33, 28, 0.9)",
-              cursor: modelIndex === 0 ? "not-allowed" : "pointer",
-              transition: "all 200ms ease",
-            }}
-          >
-            <ChevronLeft size={20} strokeWidth={1.5} />
-          </button>
-          <span
-            style={{
-              fontSize: 11,
-              letterSpacing: "0.06em",
-              color: "rgba(37, 33, 28, 0.8)",
-              minWidth: 48,
-              textAlign: "center",
-            }}
-          >
-            {modelIndex + 1} / {MODEL_PATHS.length}
-          </span>
-          <button
-            type="button"
-            aria-label="Next model"
-            disabled={modelIndex === MODEL_PATHS.length - 1}
-            onClick={() => setModelIndex((i) => i + 1)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 36,
-              height: 36,
-              border: "1px solid rgba(37, 33, 28, 0.5)",
-              borderRadius: 6,
-              background: modelIndex === MODEL_PATHS.length - 1 ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.15)",
-              color: modelIndex === MODEL_PATHS.length - 1 ? "rgba(37, 33, 28, 0.4)" : "rgba(37, 33, 28, 0.9)",
-              cursor: modelIndex === MODEL_PATHS.length - 1 ? "not-allowed" : "pointer",
-              transition: "all 200ms ease",
-            }}
-          >
-            <ChevronRight size={20} strokeWidth={1.5} />
-          </button>
         </div>
       </div>
 

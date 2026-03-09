@@ -3,6 +3,9 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useGLTF, OrbitControls, Environment, ContactShadows } from '@react-three/drei'
 import { EffectComposer, DepthOfField } from '@react-three/postprocessing'
 import * as THREE from 'three'
+import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js'
+
+RectAreaLightUniformsLib.init()
 
 // ─── 3D Model ────────────────────────────────────────────────────────────────
 
@@ -271,6 +274,7 @@ export default function SceneViewer({
   setBumpSpike: setBumpSpikeProp,
   density: densityProp,
   setDensity: setDensityProp,
+  rectAreaLightColors,
 }) {
   const [autoRotateInternal, setAutoRotateInternal] = useState(true)
   const autoRotate = autoRotateProp !== undefined ? autoRotateProp : autoRotateInternal
@@ -319,11 +323,28 @@ export default function SceneViewer({
         <ambientLight intensity={0.25} color="#e2cece" />
         <ambientLight intensity={0.2} color="#b0d0cc" />
         <ambientLight intensity={0.2} color="#b0a8c4" />
-        <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
-        <directionalLight position={[-5, 2, -3]} intensity={0.6} color="#b4c8f0" />
-        <pointLight position={[-4, 2, 3]} intensity={2.2} color="#e2cece" distance={90} decay={0.1} />
-        <pointLight position={[3, -1, 2]} intensity={1.9} color="#b0a8c4" distance={90} decay={0.1} />
-        <pointLight position={[0, 4, -2]} intensity={1.5} color="#b0d0cc" distance={90} decay={0.1} />
+        <directionalLight position={[5, 8, 5]} intensity={1} castShadow />
+        {/* 从上往下的粉紫色氛围面光 */}
+        <pointLight position={[-4, 2, 3]} intensity={0.5} color="#e2cece" distance={90} decay={0.1} />
+        <pointLight position={[3, -1, 2]} intensity={0.5} color="#b0a8c4" distance={90} decay={0.1} />
+        <pointLight position={[0, 4, -2]} intensity={0.5} color="#b0d0cc" distance={90} decay={0.1} />
+        {/* 场景顶部面光（双灯为一组，颜色由外部传入） */}
+        <rectAreaLight
+          width={10}
+          height={10}
+          intensity={1}
+          color={rectAreaLightColors?.color1 ?? "#ff997f"}
+          position={[0, 4, 4]}
+          rotation={[-Math.PI / 2, 0, 2]}
+        />
+        <rectAreaLight
+          width={10}
+          height={10}
+          intensity={1}
+          color={rectAreaLightColors?.color2 ?? "#81C0DC"}
+          position={[4, 4, 0]}
+          rotation={[-Math.PI / 2, 0, -2]}
+        />
         <Environment preset="city" environmentIntensity={1.1} />
         <ContactShadows
           position={[0, -1.6, 0]}
