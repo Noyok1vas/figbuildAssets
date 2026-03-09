@@ -19,6 +19,7 @@ function Model({
   bumpSpike = 0,
   density = 200,
   matOpacity = 0.1,
+  matColor: matColorProp,
 }) {
   const { scene: rawScene } = useGLTF(modelPath)
   const scene = useMemo(() => rawScene.clone(), [rawScene])
@@ -30,8 +31,8 @@ function Model({
   const meshRef = useRef(null)
   const modelBounds = useRef({ minX: -1, maxX: 1 })
 
-  // 材质参数：改下面数值后保存，effect 会因依赖变化重新跑并应用新材质
-  const matColor = 0xd8dce0
+  // 材质 base 色由外部传入（与颜色 tab 一致），未传则用默认银灰
+  const matColor = matColorProp ?? 0xd8dce0
   const matTransmission = 0.94
   const matThickness = 0.5
   const matRoughness = 0.2
@@ -44,6 +45,7 @@ function Model({
   const matSheenColor = 0xb0c4d0
   const matSheenRoughness = 0.35
 
+  // 仅当场景/模型变化时做居中与缩放，避免切换颜色 tab 时重复执行导致相机距离错乱
   useEffect(() => {
     const box = new THREE.Box3().setFromObject(scene)
     const center = new THREE.Vector3()
@@ -58,6 +60,24 @@ function Model({
       scene.scale.setScalar(2.5 / maxDim)
     }
 
+    scene.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+        if (!child.geometry.attributes.normal) child.geometry.computeVertexNormals()
+        meshRef.current = child
+        originalPositions.current = Float32Array.from(
+          child.geometry.attributes.position.array
+        )
+        originalNormals.current = Float32Array.from(
+          child.geometry.attributes.normal.array
+        )
+      }
+    })
+  }, [scene, threeScene])
+
+  // 仅更新材质（含 matColor），不触碰 position/scale，切换颜色 tab 时只跑这个
+  useEffect(() => {
     scene.traverse((child) => {
       if (child.isMesh) {
         const mat = new THREE.MeshPhysicalMaterial({
@@ -76,23 +96,11 @@ function Model({
           sheenColor: new THREE.Color(matSheenColor),
           sheenRoughness: matSheenRoughness,
         })
-        // 不设 mat.envMap，让渲染器用 scene.environment + scene.environmentRotation，ENV 旋转滑块才生效
         child.material = mat
-        child.castShadow = true
-        child.receiveShadow = true
-        meshRef.current = child
-        if (!child.geometry.attributes.normal) child.geometry.computeVertexNormals()
-        originalPositions.current = Float32Array.from(
-          child.geometry.attributes.position.array
-        )
-        originalNormals.current = Float32Array.from(
-          child.geometry.attributes.normal.array
-        )
       }
     })
   }, [
     scene,
-    threeScene,
     matColor,
     matTransmission,
     matThickness,
@@ -325,9 +333,9 @@ export default function SceneViewer({
         <ambientLight intensity={0.2} color="#b0a8c4" />
         <directionalLight position={[5, 8, 5]} intensity={1} castShadow />
         {/* 从上往下的粉紫色氛围面光 */}
-        <pointLight position={[-4, 2, 3]} intensity={0.5} color="#e2cece" distance={90} decay={0.1} />
-        <pointLight position={[3, -1, 2]} intensity={0.5} color="#b0a8c4" distance={90} decay={0.1} />
-        <pointLight position={[0, 4, -2]} intensity={0.5} color="#b0d0cc" distance={90} decay={0.1} />
+        <pointLight position={[-4, 2, 3]} intensity={1.5} color="#FBF3F0" distance={90} decay={0.1} />
+        <pointLight position={[3, -1, 2]} intensity={1.5} color="#FBF3F0" distance={90} decay={0.1} />
+        <pointLight position={[0, 4, -2]} intensity={1.5} color="#FBF3F0" distance={90} decay={0.1} />
         {/* 场景顶部面光（双灯为一组，颜色由外部传入） */}
         <rectAreaLight
           width={10}
@@ -364,6 +372,7 @@ export default function SceneViewer({
             bumpSpike={bumpSpike}
             density={density}
             matOpacity={matOpacity}
+            matColor={rectAreaLightColors?.matColor}
           />
         </Suspense>
         <OrbitControls

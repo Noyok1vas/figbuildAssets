@@ -8,13 +8,13 @@ const MODEL_PATHS = [
   "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/Form_03.glb",
 ];
 
-// 面光颜色组：粉紫、粉蓝、蓝紫、蓝绿、粉红（每组两色用于两个 rectAreaLight）
-const AREA_LIGHT_PRESETS: { color1: string; color2: string }[] = [
-  { color1: "#e8b4f0", color2: "#c084e0" }, // 粉紫
-  { color1: "#e0b8f8", color2: "#88b8f0" }, // 粉蓝
-  { color1: "#88a0f8", color2: "#b088e0" }, // 蓝紫
-  { color1: "#70c0d8", color2: "#60d0a8" }, // 蓝绿
-  { color1: "#f8a8c0", color2: "#f08098" }, // 粉红
+// 面光 + 材质颜色组：每组两个面光色 + 材质 base 色（粉紫、粉蓝、蓝紫、蓝绿、粉红）
+const AREA_LIGHT_PRESETS: { color1: string; color2: string; matColor: string }[] = [
+  { color1: "#FACECE", color2: "#FFD4CC", matColor: "#C6B2B4" }, // 粉红
+  { color1: "#e0b8f8", color2: "#88b8f0", matColor: "#dce4f0" }, // 粉蓝
+  { color1: "#ffffff", color2: "#7DAFB9", matColor: "#ABC5DA" }, // 蓝紫
+  { color1: "#E2E3FF", color2: "#FADBF3", matColor: "#D1BED5" }, // 粉紫
+  { color1: "#f8a8c0", color2: "#f08098", matColor: "#f0dce4" }, // 粉红
 ];
 
 export default function App() {
