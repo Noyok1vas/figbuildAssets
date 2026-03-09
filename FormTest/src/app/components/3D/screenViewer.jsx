@@ -85,12 +85,13 @@ export default function SceneViewer({
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
-      preserveDrawingBuffer: true,
+      powerPreference: 'high-performance',
     })
     renderer.outputColorSpace = THREE.SRGBColorSpace
-    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMapping = THREE.AgXToneMapping
     renderer.toneMappingExposure = 1.35
     renderer.shadowMap.enabled = true
+    renderer.shadowMap.type = THREE.VSMShadowMap
     renderer.setClearColor(0x000000, 0)
     const rect = container.getBoundingClientRect()
     renderer.setSize(rect.width, rect.height)
@@ -100,11 +101,11 @@ export default function SceneViewer({
 
     // Scene
     const scene = new THREE.Scene()
-    scene.environmentIntensity = 1.5
+    scene.environmentIntensity = 1.2
     sceneRef.current = scene
 
     // Camera
-    const camera = new THREE.PerspectiveCamera(45, rect.width / rect.height, 0.1, 1000)
+    const camera = new THREE.PerspectiveCamera(45, rect.width / rect.height, 0.5, 50)
     camera.position.set(0, 0, 5)
     cameraRef.current = camera
 
@@ -120,20 +121,28 @@ export default function SceneViewer({
     controlsRef.current = controls
 
     // ── Lights ──
-    scene.add(new THREE.AmbientLight('#e0ddf0', 0.35))
-    scene.add(new THREE.AmbientLight('#e2cece', 0.1))
+    scene.add(new THREE.AmbientLight('#e8e6f0', 0.3))
+    scene.add(new THREE.AmbientLight('#e8d8d4', 0.08))
 
-    const dirLight = new THREE.DirectionalLight('#ffffff', 1.8)
-    dirLight.position.set(5, 8, 5)
-    dirLight.castShadow = true
-    dirLight.shadow.mapSize.set(1024, 1024)
-    scene.add(dirLight)
+    const spotLight = new THREE.SpotLight('#ffffff', 50, 40, Math.PI / 4, 0.8, 1.8)
+    spotLight.position.set(5, 8, 5)
+    spotLight.target.position.set(0, 0, 0)
+    spotLight.castShadow = true
+    spotLight.shadow.mapSize.set(2048, 2048)
+    spotLight.shadow.bias = -0.0002
+    spotLight.shadow.normalBias = 0.02
+    spotLight.shadow.radius = 4
+    spotLight.shadow.blurSamples = 16
+    spotLight.shadow.camera.near = 1
+    spotLight.shadow.camera.far = 30
+    scene.add(spotLight)
+    scene.add(spotLight.target)
 
-    const pl1 = new THREE.PointLight('#FBF3F0', 12, 90, 0.1)
+    const pl1 = new THREE.PointLight('#FBF3F0', 25, 25, 2)
     pl1.position.set(-4, 2, 3)
-    const pl2 = new THREE.PointLight('#FBF3F0', 12, 90, 0.1)
+    const pl2 = new THREE.PointLight('#FBF3F0', 25, 25, 2)
     pl2.position.set(3, -1, 2)
-    const pl3 = new THREE.PointLight('#FBF3F0', 8, 90, 0.1)
+    const pl3 = new THREE.PointLight('#FBF3F0', 18, 25, 2)
     pl3.position.set(0, 4, -2)
     scene.add(pl1, pl2, pl3)
 
@@ -218,10 +227,12 @@ export default function SceneViewer({
           opacity: paramsRef.current.matOpacity,
           side: THREE.DoubleSide,
           envMapIntensity: 2.0,
-          attenuationColor: new THREE.Color(0x8a90a0),
-          attenuationDistance: 0.4,
+          attenuationColor: new THREE.Color(0x9098a8),
+          attenuationDistance: 0.5,
           sheenColor: new THREE.Color(0xb0c4d0),
-          sheenRoughness: 0.35,
+          sheenRoughness: 0.4,
+          specularIntensity: 0.8,
+          specularColor: new THREE.Color(0xffffff),
         })
         child.castShadow = true
         child.receiveShadow = true
