@@ -4,7 +4,7 @@ import SceneViewer from "./components/3D/screenViewer";
 
 const MODEL_PATHS = [
   "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/FormTest.glb",
-  "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/Form_02.glb",
+  "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/Form02.glb",
   "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/FormTest.glb",
 ];
 
