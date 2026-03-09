@@ -1,12 +1,25 @@
-import { useEffect, useRef, useState } from "react";
-import { RotateCcw, Layers, Info } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { RotateCcw, Layers, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import SceneViewer from "./components/3D/screenViewer";
+
+const MODEL_PATHS = [
+  "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/FormTest.glb",
+  "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/FormTest.glb",
+  "https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/FormTest.glb",
+];
 
 export default function App() {
   const [isIdle, setIsIdle] = useState(false);
   const [isGrabbing, setIsGrabbing] = useState(false);
   const [autoRotate, setAutoRotate] = useState(true);
-  const [canvasBlurPx, setCanvasBlurPx] = useState(6);
+  const [canvasBlurPx, setCanvasBlurPx] = useState(7);
+  const [matOpacity, setMatOpacity] = useState(0.05 + (2 / 9) * 0.35); // Thickness display 3
+  const [evolve, setEvolve] = useState(0);
+  const [fluidity, setFluidity] = useState(0);
+  const [bumpAmount, setBumpAmount] = useState(0);
+  const [bumpSpike, setBumpSpike] = useState(0);
+  const [density, setDensity] = useState(200);
+  const [modelIndex, setModelIndex] = useState(0);
   const idleTimer = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
@@ -46,7 +59,7 @@ export default function App() {
         position: "relative",
         fontFamily: "'Space Grotesk', sans-serif",
         background:
-          "radial-gradient(ellipse 120% 80% at 50% 45%, #f0f8fa 0%, #e8f4f6 22%, #dee7ed 45%, #c5e0de 70%, #a3d8d2 85%, #80cbc4 100%)",
+          "radial-gradient(ellipse 120% 100% at 50% 35%,rgb(238, 238, 238) 0%, #d0d0d0 35%,rgb(191, 191, 191) 70%,rgb(73, 73, 73) 100%)",
         zIndex: 0,
       }}
     >
@@ -111,7 +124,7 @@ export default function App() {
           justifyContent: "space-between",
           padding: "0 24px",
           background: "transparent",
-          zIndex: 20,
+          zIndex: 100,
         }}
       >
         {/* Title */}
@@ -122,7 +135,7 @@ export default function App() {
             fontWeight: 300,
             letterSpacing: "0.15em",
             textTransform: "uppercase" as const,
-            color: "#4a6b6b",
+            color: "#252019",
           }}
         >
           Atomic Viewer
@@ -151,10 +164,10 @@ export default function App() {
                 alignItems: "center",
                 justifyContent: "center",
                 background: "transparent",
-                border: "1px solid rgba(128, 203, 196, 0.25)",
+                border: "1px solid rgba(37, 33, 28, 0.5)",
                 borderRadius: 4,
                 cursor: "pointer",
-                color: "#4a6b6b",
+                color: "#252019",
                 padding: 0,
                 transition:
                   "border-color 200ms ease, color 200ms ease",
@@ -162,18 +175,18 @@ export default function App() {
               onMouseEnter={(e) => {
                 (
                   e.currentTarget as HTMLButtonElement
-                ).style.borderColor = "rgba(128, 203, 196, 0.5)";
+                ).style.borderColor = "rgba(37, 33, 28, 0.65)";
                 (
                   e.currentTarget as HTMLButtonElement
-                ).style.color = "#2d4a4a";
+                ).style.color = "#1c1915";
               }}
               onMouseLeave={(e) => {
                 (
                   e.currentTarget as HTMLButtonElement
-                ).style.borderColor = "rgba(128, 203, 196, 0.25)";
+                ).style.borderColor = "rgba(37, 33, 28, 0.5)";
                 (
                   e.currentTarget as HTMLButtonElement
-                ).style.color = "#4a6b6b";
+                ).style.color = "#252019";
               }}
             >
               <Icon size={14} strokeWidth={1.5} />
@@ -182,64 +195,235 @@ export default function App() {
         </div>
       </header>
 
-      {/* ── 3D Scene Container ──────────────────────────────────── */}
+      {/* ── 3D Scene Container + Sliders (sliders outside box) ───── */}
       <div
         style={{
           position: "absolute",
           inset: 0,
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           zIndex: 1,
+          gap: 16,
         }}
       >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 24 }}>
+          <div
+            id="scene-container"
+            onMouseDown={() => setIsGrabbing(true)}
+            onMouseUp={() => setIsGrabbing(false)}
+            onMouseEnter={(e) => {
+              (
+                e.currentTarget as HTMLDivElement
+              ).style.borderColor = "rgba(37, 33, 28, 0.6)";
+            }}
+            onMouseLeave={(e) => {
+              setIsGrabbing(false);
+              (
+                e.currentTarget as HTMLDivElement
+              ).style.borderColor = "rgba(37, 33, 28, 0.5)";
+            }}
+            style={{
+              width: "60vw",
+              height: "60vh",
+              minWidth: 400,
+              minHeight: 400,
+              background: "transparent",
+              border: "1px solid rgba(37, 33, 28, 0.5)",
+              borderRadius: 4,
+              cursor: isGrabbing ? "grabbing" : "grab",
+              transition: "border-color 200ms ease",
+            }}
+          >
+            <SceneViewer
+              key={modelIndex}
+              modelPath={MODEL_PATHS[modelIndex]}
+              autoRotate={autoRotate}
+              onAutoRotateChange={setAutoRotate}
+              canvasBlurPx={canvasBlurPx}
+              matOpacity={matOpacity}
+              fluidity={fluidity}
+              setFluidity={setFluidity}
+              evolve={evolve}
+              setEvolve={setEvolve}
+              bumpAmount={bumpAmount}
+              setBumpAmount={setBumpAmount}
+              bumpSpike={bumpSpike}
+              setBumpSpike={setBumpSpike}
+              density={density}
+              setDensity={setDensity}
+              style={{
+                width: "100%",
+                height: "100%",
+              }}
+            />
+          </div>
+          {/* Sliders panel — outside 3D box */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              gap: 20,
+              padding: "12px 0",
+            }}
+          >
+          {[
+            {
+              label: "EVOLVE",
+              value: evolve,
+              onChange: (v: number) => setEvolve(v),
+              min: 0,
+              max: 1,
+              step: 0.01,
+              display: `${Math.round(evolve * 100)}%`,
+            },
+            {
+              label: "WEIGHT",
+              value: fluidity,
+              onChange: (v: number) => setFluidity(v),
+              min: 0,
+              max: 1,
+              step: 0.01,
+              display: `${Math.round(fluidity * 100)}%`,
+            },
+            {
+              label: "BUMP",
+              value: bumpAmount,
+              onChange: (v: number) => setBumpAmount(v),
+              min: 0,
+              max: 0.15,
+              step: 0.01,
+              display: bumpAmount.toFixed(2),
+            },
+            {
+              label: "DENSITY",
+              value: density,
+              onChange: (v: number) => setDensity(v),
+              min: 100,
+              max: 600,
+              step: 1,
+              display: String(density),
+            },
+            {
+              label: "SPIKE",
+              value: bumpSpike,
+              onChange: (v: number) => setBumpSpike(v),
+              min: 0,
+              max: 1,
+              step: 0.01,
+              display: `${Math.round(bumpSpike * 100)}%`,
+            },
+          ].map(({ label, value, onChange, min, max, step, display }) => (
+            <div
+              key={label}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                gap: 6,
+              }}
+            >
+              <label
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "0.08em",
+                  color: "rgba(37, 33, 28, 0.9)",
+                  textTransform: "uppercase",
+                }}
+              >
+                {label} {display}
+              </label>
+              <input
+                type="range"
+                min={min}
+                max={max}
+                step={step}
+                value={value}
+                onChange={(e) => onChange(Number(e.target.value))}
+                style={{
+                  width: 120,
+                  accentColor: "rgba(37, 33, 28, 0.82)",
+                }}
+              />
+            </div>
+          ))}
+          </div>
+        </div>
+        {/* Model switcher arrows — below 3D block */}
         <div
-          id="scene-container"
-          onMouseDown={() => setIsGrabbing(true)}
-          onMouseUp={() => setIsGrabbing(false)}
-          onMouseEnter={(e) => {
-            (
-              e.currentTarget as HTMLDivElement
-            ).style.borderColor = "rgba(128, 203, 196, 0.5)";
-          }}
-          onMouseLeave={(e) => {
-            setIsGrabbing(false);
-            (
-              e.currentTarget as HTMLDivElement
-            ).style.borderColor = "rgba(163, 216, 210, 0.35)";
-          }}
           style={{
-            width: "60vw",
-            height: "60vh",
-            minWidth: 400,
-            minHeight: 400,
-            background: "transparent",
-            border: "1px solid rgba(163, 216, 210, 0.35)",
-            borderRadius: 4,
-            cursor: isGrabbing ? "grabbing" : "grab",
-            transition: "border-color 200ms ease",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
           }}
         >
-          <SceneViewer
-            autoRotate={autoRotate}
-            onAutoRotateChange={setAutoRotate}
-            canvasBlurPx={canvasBlurPx}
+          <button
+            type="button"
+            aria-label="Previous model"
+            disabled={modelIndex === 0}
+            onClick={() => setModelIndex((i) => i - 1)}
             style={{
-              width: "100%",
-              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 36,
+              height: 36,
+              border: "1px solid rgba(37, 33, 28, 0.5)",
+              borderRadius: 6,
+              background: modelIndex === 0 ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.15)",
+              color: modelIndex === 0 ? "rgba(37, 33, 28, 0.4)" : "rgba(37, 33, 28, 0.9)",
+              cursor: modelIndex === 0 ? "not-allowed" : "pointer",
+              transition: "all 200ms ease",
             }}
-          />
+          >
+            <ChevronLeft size={20} strokeWidth={1.5} />
+          </button>
+          <span
+            style={{
+              fontSize: 11,
+              letterSpacing: "0.06em",
+              color: "rgba(37, 33, 28, 0.8)",
+              minWidth: 48,
+              textAlign: "center",
+            }}
+          >
+            {modelIndex + 1} / {MODEL_PATHS.length}
+          </span>
+          <button
+            type="button"
+            aria-label="Next model"
+            disabled={modelIndex === MODEL_PATHS.length - 1}
+            onClick={() => setModelIndex((i) => i + 1)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 36,
+              height: 36,
+              border: "1px solid rgba(37, 33, 28, 0.5)",
+              borderRadius: 6,
+              background: modelIndex === MODEL_PATHS.length - 1 ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.15)",
+              color: modelIndex === MODEL_PATHS.length - 1 ? "rgba(37, 33, 28, 0.4)" : "rgba(37, 33, 28, 0.9)",
+              cursor: modelIndex === MODEL_PATHS.length - 1 ? "not-allowed" : "pointer",
+              transition: "all 200ms ease",
+            }}
+          >
+            <ChevronRight size={20} strokeWidth={1.5} />
+          </button>
         </div>
       </div>
 
-      {/* ── Right panel: Blur slider + ROTATE button ─────────────── */}
+      {/* ── Right panel: Blur slider + ROTATE button ───────────────── */}
       <div
         style={{
           position: "fixed",
           top: 56,
           right: 24,
           bottom: 52,
-          zIndex: 20,
+          zIndex: 100,
           display: "flex",
           flexDirection: "column",
           alignItems: "flex-end",
@@ -258,22 +442,57 @@ export default function App() {
             style={{
               fontSize: 10,
               letterSpacing: "0.08em",
-              color: "rgba(74, 107, 107, 0.8)",
+              color: "rgba(37, 33, 28, 0.9)",
               textTransform: "uppercase",
             }}
           >
-            Blur {canvasBlurPx}px
+            Blur {canvasBlurPx}
           </label>
           <input
             type="range"
             min={0}
-            max={20}
+            max={10}
             step={1}
             value={canvasBlurPx}
             onChange={(e) => setCanvasBlurPx(Number(e.target.value))}
             style={{
               width: 100,
-              accentColor: "rgba(128, 203, 196, 0.8)",
+              accentColor: "rgba(37, 33, 28, 0.82)",
+            }}
+          />
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: 6,
+          }}
+        >
+          <label
+            style={{
+              fontSize: 10,
+              letterSpacing: "0.08em",
+              color: "rgba(37, 33, 28, 0.9)",
+              textTransform: "uppercase",
+            }}
+          >
+            Thickness{" "}
+            {Math.max(
+              1,
+              Math.min(10, Math.round(1 + ((matOpacity - 0.05) / 0.35) * 9)),
+            )}
+          </label>
+          <input
+            type="range"
+            min={0.05}
+            max={0.4}
+            step={0.01}
+            value={matOpacity}
+            onChange={(e) => setMatOpacity(Number(e.target.value))}
+            style={{
+              width: 100,
+              accentColor: "rgba(37, 33, 28, 0.82)",
             }}
           />
         </div>
@@ -282,12 +501,12 @@ export default function App() {
           onClick={() => setAutoRotate((v) => !v)}
           style={{
             background: "rgba(255,255,255,0.15)",
-            border: "1px solid rgba(0,0,0,0.1)",
+            border: "1px solid rgba(37, 33, 28, 0.5)",
             borderRadius: 6,
             padding: "6px 12px",
             fontSize: 11,
             letterSpacing: "0.08em",
-            color: "#555",
+            color: "#252019",
             cursor: "pointer",
             transition: "all 200ms ease",
           }}
@@ -304,6 +523,22 @@ export default function App() {
         </button>
       </div>
 
+      {/* ── Bottom-left hint (on top of all content) ─────────────── */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 52,
+          left: 24,
+          zIndex: 100,
+          fontSize: 10,
+          letterSpacing: "0.12em",
+          color: "rgba(37, 33, 28, 0.82)",
+          userSelect: "none",
+        }}
+      >
+        DRAG TO ROTATE · SCROLL TO ZOOM
+      </div>
+
       {/* ── Bottom Status Bar ───────────────────────────────────── */}
       <footer
         style={{
@@ -318,14 +553,14 @@ export default function App() {
           justifyContent: "space-between",
           padding: "0 24px",
           background: "transparent",
-          zIndex: 20,
+          zIndex: 100,
         }}
       >
         <span
           style={{
             fontFamily: "'Space Mono', monospace",
             fontSize: 11,
-            color: "rgba(74, 107, 107, 0.65)",
+            color: "rgba(37, 33, 28, 0.82)",
             fontWeight: 400,
             letterSpacing: "0.04em",
           }}
@@ -337,7 +572,7 @@ export default function App() {
           style={{
             fontFamily: "'Space Mono', monospace",
             fontSize: 11,
-            color: "rgba(74, 107, 107, 0.65)",
+            color: "rgba(37, 33, 28, 0.82)",
             fontWeight: 400,
             letterSpacing: "0.04em",
           }}
@@ -349,7 +584,7 @@ export default function App() {
           style={{
             fontFamily: "'Space Mono', monospace",
             fontSize: 11,
-            color: "rgba(74, 107, 107, 0.65)",
+            color: "rgba(37, 33, 28, 0.82)",
             fontWeight: 400,
             letterSpacing: "0.04em",
           }}

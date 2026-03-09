@@ -1,99 +1,45 @@
-import { useRef, useEffect, useState, Suspense } from 'react'
+import { useRef, useEffect, useState, Suspense, useMemo } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useGLTF, OrbitControls, Environment, ContactShadows } from '@react-three/drei'
 import { EffectComposer, DepthOfField } from '@react-three/postprocessing'
 import * as THREE from 'three'
 
-// ─── Simplex noise and shader injection strings ───────────────────────────────
-
-const SNOISE_VERT = `
-vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
-vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
-vec4 permute(vec4 x){return mod289(((x*34.)+1.)*x);}
-float snoise(vec3 v){
-  const vec2 C=vec2(1./6.,1./3.);
-  const vec4 D=vec4(0.,.5,1.,2.);
-  vec3 i=floor(v+dot(v,C.yyy));
-  vec3 x0=v-i+dot(i,C.xxx);
-  vec3 g=step(x0.yzx,x0.xyz);
-  vec3 l=1.-g;
-  vec3 i1=min(g.xyz,l.zxy);
-  vec3 i2=max(g.xyz,l.zxy);
-  vec3 x1=x0-i1+C.xxx;
-  vec3 x2=x0-i2+C.yyy;
-  vec3 x3=x0-D.yyy;
-  i=mod289(i);
-  vec4 p=permute(permute(permute(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
-  float n_=.142857142857;
-  vec3 ns=n_*D.wyz-D.xzx;
-  vec4 j=p-49.*floor(p*ns.z*ns.z);
-  vec4 x_=floor(j*ns.z);
-  vec4 y_=floor(j-7.*x_);
-  vec4 x=x_*ns.x+ns.yyyy;
-  vec4 y=y_*ns.x+ns.yyyy;
-  vec4 h=1.-abs(x)-abs(y);
-  vec4 b0=vec4(x.xy,y.xy);
-  vec4 b1=vec4(x.zw,y.zw);
-  vec4 s0=floor(b0)*2.+1.;
-  vec4 s1=floor(b1)*2.+1.;
-  vec4 sh=-step(h,vec4(0.));
-  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;
-  vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
-  vec3 p0=vec3(a0.xy,h.x);
-  vec3 p1=vec3(a0.zw,h.y);
-  vec3 p2=vec3(a1.xy,h.z);
-  vec3 p3=vec3(a1.zw,h.w);
-  vec4 norm=1./(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3))+1e-6);
-  p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
-  vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);
-  m=m*m;
-  return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
-}
-`
-
-const VERT_DEFORM = `
-float angle = uTwist * position.y;
-float c = cos(angle); float s = sin(angle);
-float px = transformed.x, pz = transformed.z;
-transformed.x = px * c - pz * s;
-transformed.z = px * s + pz * c;
-transformed.y *= uStretch;
-transformed += normal * snoise(position * uNoiseFreq + vec3(uTime * 0.3, 0.0, 0.0)) * uNoiseAmp;
-`
-
-const VORONOI_FRAG = `
-vec2 uv = vUv * uPatternScale;
-vec2 id = floor(uv);
-vec2 gv = fract(uv) - 0.5;
-float md1 = 8.0;
-float md2 = 8.0;
-for (int j = -1; j <= 1; j++) {
-  for (int i = -1; i <= 1; i++) {
-    vec2 off = vec2(float(i), float(j));
-    vec2 n = id + off;
-    vec2 p = n + fract(sin(dot(n, vec2(127.1, 311.7))) * 43758.5453);
-    vec2 d = gv - off - (p - n);
-    float dist = length(d);
-    if (dist < md1) { md2 = md1; md1 = dist; }
-    else if (dist < md2) { md2 = dist; }
-  }
-}
-float edge = smoothstep(0.0, 0.08, md2 - md1);
-gl_FragColor.rgb *= (1.0 - edge * uPatternMix);
-`
-
-// ─── 3D Model with parametric shader ──────────────────────────────────────────
+// ─── 3D Model ────────────────────────────────────────────────────────────────
 
 function Model({
   modelPath,
   autoRotate,
   floatAmplitude = 0.08,
-  uniformsRef,
+  fluidity = 0,
+  evolve = 0,
+  bumpAmount = 0,
+  bumpSpike = 0,
+  density = 200,
+  matOpacity = 0.1,
 }) {
-  const { scene } = useGLTF(modelPath)
+  const { scene: rawScene } = useGLTF(modelPath)
+  const scene = useMemo(() => rawScene.clone(), [rawScene])
   const { scene: threeScene } = useThree()
   const groupRef = useRef()
   const clock = useRef(0)
+  const originalPositions = useRef(null)
+  const originalNormals = useRef(null)
+  const meshRef = useRef(null)
+  const modelBounds = useRef({ minX: -1, maxX: 1 })
+
+  // 材质参数：改下面数值后保存，effect 会因依赖变化重新跑并应用新材质
+  const matColor = 0xd8dce0
+  const matTransmission = 0.94
+  const matThickness = 0.5
+  const matRoughness = 0.2
+  const matMetalness = 0.4
+  const matIor = 1.45
+  const matTransparent = true
+  const matEnvMapIntensity = 0.88
+  const matAttenuationColor = 0xb8bcc4
+  const matAttenuationDistance = 0.55
+  const matSheenColor = 0xb0c4d0
+  const matSheenRoughness = 0.35
 
   useEffect(() => {
     const box = new THREE.Box3().setFromObject(scene)
@@ -103,90 +49,178 @@ function Model({
 
     const size = new THREE.Vector3()
     box.getSize(size)
+    modelBounds.current = { minX: -size.x / 2, maxX: size.x / 2 }
     const maxDim = Math.max(size.x, size.y, size.z)
     if (maxDim > 0) {
       scene.scale.setScalar(2.5 / maxDim)
     }
 
-    const envMap = threeScene?.environment ?? null
-    const u = uniformsRef.current
-
     scene.traverse((child) => {
       if (child.isMesh) {
         const mat = new THREE.MeshPhysicalMaterial({
-          color: new THREE.Color(0xb0c8d4),
-          transmission: 0.94,
-          thickness: 0.2,
-          roughness: 0.42,
-          metalness: 0.35,
-          ior: 1.45,
-          transparent: true,
-          opacity: 0.1,
+          color: new THREE.Color(matColor),
+          transmission: matTransmission,
+          thickness: matThickness,
+          roughness: matRoughness,
+          metalness: matMetalness,
+          ior: matIor,
+          transparent: matTransparent,
+          opacity: matOpacity,
           side: THREE.DoubleSide,
-          envMapIntensity: 1.25,
-          attenuationColor: new THREE.Color(0x9dd5d0),
-          attenuationDistance: 0.55,
-          clearcoat: 0.35,
-          clearcoatRoughness: 0.15,
-          sheen: 0.12,
-          sheenColor: new THREE.Color(0xffffff),
-          sheenRoughness: 0.4,
+          envMapIntensity: matEnvMapIntensity,
+          attenuationColor: new THREE.Color(matAttenuationColor),
+          attenuationDistance: matAttenuationDistance,
+          sheenColor: new THREE.Color(matSheenColor),
+          sheenRoughness: matSheenRoughness,
         })
-        mat.envMap = envMap
+        // 不设 mat.envMap，让渲染器用 scene.environment + scene.environmentRotation，ENV 旋转滑块才生效
         child.material = mat
         child.castShadow = true
         child.receiveShadow = true
-
-        mat.onBeforeCompile = (shader) => {
-          shader.uniforms.uTwist = u.uTwist
-          shader.uniforms.uStretch = u.uStretch
-          shader.uniforms.uNoiseAmp = u.uNoiseAmp
-          shader.uniforms.uNoiseFreq = u.uNoiseFreq
-          shader.uniforms.uPatternScale = u.uPatternScale
-          shader.uniforms.uPatternMix = u.uPatternMix
-          shader.uniforms.uTime = u.uTime
-
-          shader.vertexShader = shader.vertexShader.replace(
-            '#include <common>',
-            '#include <common>\n' +
-            ' uniform float uTwist;\n uniform float uStretch;\n uniform float uNoiseAmp;\n uniform float uNoiseFreq;\n uniform float uPatternScale;\n uniform float uPatternMix;\n uniform float uTime;\n' +
-            SNOISE_VERT
-          )
-          shader.vertexShader = shader.vertexShader.replace(
-            '#include <begin_vertex>',
-            '#include <begin_vertex>\n' + VERT_DEFORM
-          )
-
-          shader.fragmentShader = shader.fragmentShader.replace(
-            '#include <common>',
-            '#include <common>\n uniform float uPatternScale;\n uniform float uPatternMix;\n'
-          )
-          if (shader.fragmentShader.includes('vUv')) {
-            shader.fragmentShader = shader.fragmentShader.replace(
-              '#include <dithering_fragment>',
-              '#include <dithering_fragment>\n' + VORONOI_FRAG
-            )
-          }
-        }
+        meshRef.current = child
+        if (!child.geometry.attributes.normal) child.geometry.computeVertexNormals()
+        originalPositions.current = Float32Array.from(
+          child.geometry.attributes.position.array
+        )
+        originalNormals.current = Float32Array.from(
+          child.geometry.attributes.normal.array
+        )
       }
     })
-  }, [scene, threeScene, uniformsRef])
+  }, [
+    scene,
+    threeScene,
+    matColor,
+    matTransmission,
+    matThickness,
+    matRoughness,
+    matMetalness,
+    matIor,
+    matTransparent,
+    matOpacity,
+    matEnvMapIntensity,
+    matAttenuationColor,
+    matAttenuationDistance,
+    matSheenColor,
+    matSheenRoughness,
+  ])
 
   useFrame((_, delta) => {
-    if (!groupRef.current || !uniformsRef.current) return
-    const u = uniformsRef.current
-    u.uTime.value += delta
-    u.uTwist.value = 0
-    u.uStretch.value = 1
-    u.uNoiseAmp.value = 0
-    u.uNoiseFreq.value = 3
-    u.uPatternMix.value = 0
-    u.uPatternScale.value = 1
-
+    if (!groupRef.current) return
     clock.current += delta
+    const t = clock.current
+    if (threeScene.environment) {
+      if (!threeScene.environmentRotation) threeScene.environmentRotation = new THREE.Euler(0, 0, 0)
+      if (evolve > 0) {
+        // 环境光 swing：周期为模型呼吸的 1.2 倍（频率 = freq/1.2），三轴等幅
+        const minFreq = 1.0
+        const maxFreq = 3.0
+        const freq = minFreq + evolve * (maxFreq - minFreq)
+        const freqEnv = freq / 1.2
+        const swingAmplitude = evolve * Math.PI
+        const swingX = swingAmplitude * Math.sin(t * freqEnv + 1)
+        const swingY = swingAmplitude * Math.sin(t * freqEnv + 0.5)
+        const swingZ = swingAmplitude * Math.sin(t * freqEnv + 2)
+        threeScene.environmentRotation.set(swingX, swingY, swingZ)
+      } else {
+        threeScene.environmentRotation.set(0, 0, 0)
+      }
+    }
     groupRef.current.position.y = Math.sin(clock.current * 0.6) * floatAmplitude
     if (autoRotate) groupRef.current.rotation.y += delta * 0.4
-    groupRef.current.rotation.z = Math.sin(clock.current * 0.3) * 0.015
+    groupRef.current.rotation.z = Math.sin(t * 0.3) * 0.015
+
+    // STEP 1: FLUIDITY — keep exactly as is
+    if (originalPositions.current && meshRef.current) {
+      const pos = meshRef.current.geometry.attributes.position
+      const orig = originalPositions.current
+      for (let i = 0; i < pos.count; i++) {
+        const ox = orig[i * 3]
+        const oy = orig[i * 3 + 1]
+        const oz = orig[i * 3 + 2]
+        const f = fluidity * 0.6
+        const wave = f > 0
+          ? Math.sin(ox * 2.5 + t * f * 3) *
+            Math.cos(oz * 2.5 + t * f * 2) * 0.08 * f
+          : 0
+        pos.setXYZ(i, ox, oy + wave, oz)
+      }
+      pos.needsUpdate = true
+      meshRef.current.geometry.computeVertexNormals()
+    }
+
+    // STEP 2: EVOLVE — mesh scale only, no vertex manipulation
+    if (meshRef.current) {
+      if (evolve > 0) {
+        const minFreq = 1.0   // slider=0 时最慢呼吸
+        const maxFreq = 3.0   // slider=1 时最快呼吸
+        const freq = minFreq + evolve * (maxFreq - minFreq)
+        const breath = 1 + Math.sin(clock.current * freq) * 0.08
+        meshRef.current.scale.set(breath, breath, breath)
+      } else {
+        meshRef.current.scale.set(1, 1, 1)
+      }
+    }
+
+    // STEP 3: Static surface bump — additive on current pos (stacks with FLUIDITY)
+    if (
+      meshRef.current?.geometry?.attributes?.position &&
+      originalPositions.current &&
+      originalNormals.current
+    ) {
+      const pos = meshRef.current.geometry.attributes.position
+      const orig = originalPositions.current
+      const norms = originalNormals.current
+
+      for (let i = 0; i < pos.count; i++) {
+        const ox = orig[i * 3]
+        const oy = orig[i * 3 + 1]
+        const oz = orig[i * 3 + 2]
+        const nx = norms[i * 3]
+        const ny = norms[i * 3 + 1]
+        const nz = norms[i * 3 + 2]
+
+        if (bumpAmount > 0) {
+          const freq = density
+          const n1 = Math.sin(ox * freq) * Math.cos(oy * freq)
+          const n2 = Math.sin(oy * freq) * Math.cos(oz * freq)
+          const n3 = Math.sin(oz * freq) * Math.cos(ox * freq)
+          const raw = (n1 + n2 + n3) / 3
+          const rectified = Math.max(0, raw)
+          const power = 1.0 - bumpSpike * 0.98
+          const shaped = Math.pow(rectified, power)
+          const amount = shaped * bumpAmount * 0.25
+
+          pos.setXYZ(i,
+            pos.getX(i) + nx * amount,
+            pos.getY(i) + ny * amount,
+            pos.getZ(i) + nz * amount
+          )
+        }
+      }
+      pos.needsUpdate = true
+      meshRef.current.geometry.computeVertexNormals()
+    }
+
+    // When bumpAmount = 0: remove bump only (keep FLUIDITY)
+    if (bumpAmount === 0 && meshRef.current && originalPositions.current) {
+      const pos = meshRef.current.geometry.attributes.position
+      const orig = originalPositions.current
+      const f = fluidity * 0.6
+      const wave = (i) => {
+        const ox = orig[i * 3]
+        const oz = orig[i * 3 + 2]
+        return f > 0
+          ? Math.sin(ox * 2.5 + t * f * 3) * Math.cos(oz * 2.5 + t * f * 2) * 0.08 * f
+          : 0
+      }
+      for (let i = 0; i < pos.count; i++) {
+        pos.setXYZ(i, orig[i * 3], orig[i * 3 + 1] + wave(i), orig[i * 3 + 2])
+      }
+      pos.needsUpdate = true
+      meshRef.current.geometry.computeVertexNormals()
+    }
+
   })
 
   return (
@@ -194,6 +228,16 @@ function Model({
       <primitive object={scene} />
     </group>
   )
+}
+
+// ─── Physical lights for transmission ────────────────────────────────────────
+
+function PhysicalLights() {
+  const { gl } = useThree()
+  useEffect(() => {
+    gl.physicallyCorrectLights = true
+  }, [gl])
+  return null
 }
 
 // ─── Fallback while loading ───────────────────────────────────────────────────
@@ -216,28 +260,37 @@ export default function SceneViewer({
   autoRotate: autoRotateProp,
   onAutoRotateChange,
   canvasBlurPx = 6,
+  matOpacity = 0.1,
+  fluidity: fluidityProp,
+  setFluidity: setFluidityProp,
+  evolve: evolveProp,
+  setEvolve: setEvolveProp,
+  bumpAmount: bumpAmountProp,
+  setBumpAmount: setBumpAmountProp,
+  bumpSpike: bumpSpikeProp,
+  setBumpSpike: setBumpSpikeProp,
+  density: densityProp,
+  setDensity: setDensityProp,
 }) {
   const [autoRotateInternal, setAutoRotateInternal] = useState(true)
   const autoRotate = autoRotateProp !== undefined ? autoRotateProp : autoRotateInternal
   const setAutoRotate = onAutoRotateChange ?? setAutoRotateInternal
   const [isDragging, setIsDragging] = useState(false)
-
-  const uniformsRef = useRef({
-    uTwist: { value: 0 },
-    uStretch: { value: 1 },
-    uNoiseAmp: { value: 0 },
-    uNoiseFreq: { value: 3 },
-    uPatternScale: { value: 1 },
-    uPatternMix: { value: 0 },
-    uTime: { value: 0 },
-  })
-
-  const focusDistance = 0.015
-  const focalLength = 0.025
-  const bokehScale = 5
-  const color = '#111111'
-  const roughness = 1
-  const metalness = 1
+  const [fluidityState, setFluidityState] = useState(0)
+  const [evolveState, setEvolveState] = useState(0)
+  const [bumpAmountState, setBumpAmountState] = useState(0)
+  const [bumpSpikeState, setBumpSpikeState] = useState(0)
+  const [densityState, setDensityState] = useState(200)
+  const fluidity = fluidityProp !== undefined ? fluidityProp : fluidityState
+  const setFluidity = setFluidityProp ?? setFluidityState
+  const evolve = evolveProp !== undefined ? evolveProp : evolveState
+  const setEvolve = setEvolveProp ?? setEvolveState
+  const bumpAmount = bumpAmountProp !== undefined ? bumpAmountProp : bumpAmountState
+  const setBumpAmount = setBumpAmountProp ?? setBumpAmountState
+  const bumpSpike = bumpSpikeProp !== undefined ? bumpSpikeProp : bumpSpikeState
+  const setBumpSpike = setBumpSpikeProp ?? setBumpSpikeState
+  const density = densityProp !== undefined ? densityProp : densityState
+  const setDensity = setDensityProp ?? setDensityState
 
   return (
     <div
@@ -253,17 +306,25 @@ export default function SceneViewer({
     >
       <Canvas
         camera={{ position: [0, 0, 1], fov: 45 }}
-        style={{ background: 'transparent', filter: `blur(${canvasBlurPx}px)` }}
-        gl={{ antialias: true, alpha: true }}
+        style={{ background: 'transparent' }}
+        gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
+        flat={false}
+        linear={false}
         onPointerDown={() => setIsGrabbing(true)}
         onPointerUp={() => setIsGrabbing(false)}
         onPointerLeave={() => setIsGrabbing(false)}
       >
-        <ambientLight intensity={0.3} />
+        <PhysicalLights />
+        <ambientLight intensity={0.5} color="#dce0f2" />
+        <ambientLight intensity={0.25} color="#e2cece" />
+        <ambientLight intensity={0.2} color="#b0d0cc" />
+        <ambientLight intensity={0.2} color="#b0a8c4" />
         <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
-        <directionalLight position={[-5, 2, -3]} intensity={0.4} color="#c8d8f0" />
-        <pointLight position={[0, -3, 2]} intensity={0.3} color="#f0ece8" />
-        <Environment preset="studio" />
+        <directionalLight position={[-5, 2, -3]} intensity={0.6} color="#b4c8f0" />
+        <pointLight position={[-4, 2, 3]} intensity={2.2} color="#e2cece" distance={90} decay={0.1} />
+        <pointLight position={[3, -1, 2]} intensity={1.9} color="#b0a8c4" distance={90} decay={0.1} />
+        <pointLight position={[0, 4, -2]} intensity={1.5} color="#b0d0cc" distance={90} decay={0.1} />
+        <Environment preset="city" environmentIntensity={1.1} />
         <ContactShadows
           position={[0, -1.6, 0]}
           opacity={0.15}
@@ -276,7 +337,12 @@ export default function SceneViewer({
           <Model
             modelPath={modelPath}
             autoRotate={autoRotate}
-            uniformsRef={uniformsRef}
+            fluidity={fluidity}
+            evolve={evolve * 0.6}
+            bumpAmount={bumpAmount}
+            bumpSpike={bumpSpike}
+            density={density}
+            matOpacity={matOpacity}
           />
         </Suspense>
         <OrbitControls
@@ -300,21 +366,51 @@ export default function SceneViewer({
         </EffectComposer>
       </Canvas>
 
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        zIndex: 10,
+        backdropFilter: `blur(${canvasBlurPx * 1.5}px) brightness(${1 + canvasBlurPx * 0.012}) contrast(${1 + canvasBlurPx * 0.015})`,
+        WebkitBackdropFilter: `blur(${canvasBlurPx * 1.5}px) brightness(${1 + canvasBlurPx * 0.012}) contrast(${1 + canvasBlurPx * 0.015})`,
+        background: `rgba(255, 255, 255, ${canvasBlurPx * 0.02})`,
+        transition: 'backdrop-filter 0.15s ease',
+      }} />
+      {/* Edge blur: extra blur toward the edges */}
       <div
+        aria-hidden
         style={{
           position: 'absolute',
-          bottom: 16,
-          left: 16,
-          fontSize: 10,
-          letterSpacing: '0.12em',
-          color: 'rgba(0,0,0,0.35)',
-          userSelect: 'none',
+          inset: 0,
+          pointerEvents: 'none',
+          zIndex: 10,
+          backdropFilter: `blur(${canvasBlurPx * 2.5}px)`,
+          WebkitBackdropFilter: `blur(${canvasBlurPx * 2.5}px)`,
+          maskImage: 'radial-gradient(ellipse 90% 90% at 50% 50%, transparent 42%, black 88%)',
+          WebkitMaskImage: 'radial-gradient(ellipse 90% 90% at 50% 50%, transparent 42%, black 88%)',
+          transition: 'backdrop-filter 0.15s ease',
         }}
-      >
-        DRAG TO ROTATE · SCROLL TO ZOOM
-      </div>
+      />
+      {/* Noise overlay: stronger when blur is higher */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          zIndex: 11,
+          opacity: canvasBlurPx * 0.045,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch' result='noise'/%3E%3CfeColorMatrix in='noise' type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'repeat',
+          backgroundSize: '256px 256px',
+          mixBlendMode: 'overlay',
+          transition: 'opacity 0.15s ease',
+        }}
+      />
     </div>
   )
 }
 
 useGLTF.preload('https://raw.githubusercontent.com/Noyok1vas/figbuildAssets/main/FormTest.glb')
+// Preload second model when you add a different URL in App MODEL_PATHS:
+// useGLTF.preload('https://...your-second-model.glb')
