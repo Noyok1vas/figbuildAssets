@@ -21,8 +21,8 @@ export default function App() {
   const [isIdle, setIsIdle] = useState(false);
   const [isGrabbing, setIsGrabbing] = useState(false);
   const [autoRotate, setAutoRotate] = useState(true);
-  const [canvasBlurPx, setCanvasBlurPx] = useState(7);
-  const [matOpacity, setMatOpacity] = useState(0.05 + (2 / 9) * 0.35); // Thickness display 3
+  const [canvasBlurPx, setCanvasBlurPx] = useState(4);
+  const matOpacity = 0.4;
   const [evolve, setEvolve] = useState(0);
   const [fluidity, setFluidity] = useState(0);
   const [bumpAmount, setBumpAmount] = useState(0);
@@ -88,35 +88,10 @@ export default function App() {
         }}
       />
 
-      {/* ── Frosted glass overlay (full page) ───────────────────── */}
+      {/* ── Frosted glass overlay (full page) — disabled ───────────────────── */}
       <div
         style={{
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          zIndex: 10,
-          backdropFilter: "blur(24px) saturate(160%) brightness(1.04)",
-          WebkitBackdropFilter:
-            "blur(24px) saturate(160%) brightness(1.04)",
-          background: "rgba(255, 255, 255, 0.06)",
-          maskImage: `radial-gradient(
-    ellipse 55% 52% at 50% 50%,
-    transparent 0%,
-    transparent 38%,
-    rgba(0,0,0,0.15) 52%,
-    rgba(0,0,0,0.55) 68%,
-    rgba(0,0,0,0.92) 84%,
-    black 100%
-  )`,
-          WebkitMaskImage: `radial-gradient(
-    ellipse 55% 52% at 50% 50%,
-    transparent 0%,
-    transparent 38%,
-    rgba(0,0,0,0.15) 52%,
-    rgba(0,0,0,0.55) 68%,
-    rgba(0,0,0,0.92) 84%,
-    black 100%
-  )`,
+          display: "none",
         }}
       />
 
@@ -510,41 +485,6 @@ export default function App() {
             step={1}
             value={canvasBlurPx}
             onChange={(e) => setCanvasBlurPx(Number(e.target.value))}
-            style={{
-              width: 100,
-              accentColor: "rgba(37, 33, 28, 0.82)",
-            }}
-          />
-        </div>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-            gap: 6,
-          }}
-        >
-          <label
-            style={{
-              fontSize: 10,
-              letterSpacing: "0.08em",
-              color: "rgba(37, 33, 28, 0.9)",
-              textTransform: "uppercase",
-            }}
-          >
-            Thickness{" "}
-            {Math.max(
-              1,
-              Math.min(10, Math.round(1 + ((matOpacity - 0.05) / 0.35) * 9)),
-            )}
-          </label>
-          <input
-            type="range"
-            min={0.05}
-            max={0.4}
-            step={0.01}
-            value={matOpacity}
-            onChange={(e) => setMatOpacity(Number(e.target.value))}
             style={{
               width: 100,
               accentColor: "rgba(37, 33, 28, 0.82)",
